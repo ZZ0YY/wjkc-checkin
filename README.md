@@ -2,7 +2,7 @@
 
 这是一个基于 GitHub Actions 的自动化脚本，用于每日自动在**网际快车 (wjkc.lol)** 网站执行签到任务，以获取每日奖励。
 
-[![WJKC Check-in](https://github.com/你的GitHub用户名/你的仓库名/actions/workflows/checkin.yml/badge.svg)](https://github.com/你的GitHub用户名/你的仓库名/actions/workflows/checkin.yml)
+[![WJKC Check-in](https://github.com/ZZ0YY/wjkc-checkin/actions/workflows/checkin.yml/badge.svg)](https://github.com/ZZ0YY/wjkc-checkin/actions/workflows/checkin.yml)
 
 > **免责声明**: 本项目仅用于学习和技术研究，旨在自动化处理日常重复任务。请在遵守目标网站用户协议的前提下使用。因使用本项目而导致的任何问题（包括但不限于账号封禁），项目作者概不负责。
 
