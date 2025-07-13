@@ -29,8 +29,8 @@
     -   按 `F12` 打开开发者工具，切换到 **“网络 (Network)”** 标签页。
     -   刷新页面，随便点击一个请求。
     -   在右侧的 **“请求标头 (Request Headers)”** 中找到 `Cookie` 字段。
-    -   Cookie 的内容类似：`...; token=c5a8f720-5ff0-11f0-b40b-497ac476035e; ...`
-    -   复制 `token=` 后面的那一段长字符串，例如 `c5a8f720-5ff0-11f0-b40b-497ac476035e`。**这串字符就是你的 Token**。
+    -   Cookie 的内容类似：`...; token=c###f720-5ff0-11f0-b##b-497a###6035e; ...`
+    -   复制 `token=` 后面的那一段长字符串，例如 `c5####20-5ff0-11f0-b###-497#####035e`。**这串字符就是你的 Token**。
 
 ### 部署步骤
 
@@ -48,7 +48,7 @@
     -   **Value**: 粘贴你准备工作中获取的 Token。
     -   如果你有**多个账号**，每个账号的 Token **占一行**。
       ```
-      c5a8f720-5ff0-11f0-b40b-497ac476035e
+      c5####20-5ff0-11f0-b##b-49######035e
       xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
       yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy
       ```
