@@ -65,13 +65,18 @@ const getTokenByLogin = async (email, password) => {
         const decodedData = Buffer.from(result.data, 'base64').toString('utf-8');
         const loginResult = JSON.parse(decodedData);
 
-        if (loginResult.code === 0 && loginResult.data.token) {
+        // **调试关键**：无论成功失败，都先打印出解码后的服务器响应
+        console.log(`  - [Debug] Login API Response: ${JSON.stringify(loginResult)}`);
+
+        if (loginResult.code === 0 && loginResult.data && loginResult.data.token) {
             return loginResult.data.token; // 登录成功，返回 token
         } else {
-            throw new Error(`登录失败: ${loginResult.msg || '返回了非预期的成功格式'}`);
+            // 构造更详细的错误信息
+            throw new Error(`Code: ${loginResult.code}, Msg: ${loginResult.msg}`);
         }
     } else {
-        throw new Error(result.msg || '登录响应格式无效');
+        // 如果外层就没有 data 字段
+        throw new Error(`响应格式无效，原始响应: ${JSON.stringify(result)}`);
     }
 };
 
