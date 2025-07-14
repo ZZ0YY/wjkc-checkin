@@ -1,73 +1,130 @@
 /**
- * 网际快车 (wjkc.lol) 自动签到脚本 - 优化版
+ * 网际快车 (wjkc.lol) 自动化脚本 - 模拟登录版
  *
- * @version 1.2.0
+ * @version 2.0.0
  * @date 2024-07-14
  *
  * 功能:
- * 1. 支持通过 GitHub Secrets 配置多账号，并为每个账号设置别名。
- * 2. 自动处理 Base64 编码和解码。
- * 3. 推送详细的、人性化的签到报告到指定渠道。
- * 4. 公开日志中不包含任何敏感或详细信息，只报告执行状态。
+ * 1. 通过账号密码模拟登录，自动获取/刷新 Token，无需手动抓包。
+ * 2. 密码经过 MD5 加密，符合网站安全要求。
+ * 3. 自动执行签到任务。
+ * 4. 支持多账号配置，并可设置别名。
+ * 5. 推送详细的签到报告。
+ * 6. 公开日志中不包含任何敏感或详细信息，只报告执行状态。
  */
+
+// 引入 Node.js 内置的加密模块
+const crypto = require('crypto');
 
 /**
- * 核心签到函数，为一个账号执行签到操作。
- * @param {string} token - 用户的身份令牌。
- * @returns {Promise<string>} - 返回包含该账号执行结果的、详细的通知字符串。
+ * MD5 加密函数
+ * @param {string} text - 需要加密的明文.
+ * @returns {string} - 32位小写MD5加密字符串.
  */
-const runCheckinForAccount = async (token) => {
-    try {
-        const headers = {
-            'Host': 'wjkc.lol',
-            'Accept': 'application/json, text/plain, */*',
-            'Content-Type': 'application/json',
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
-            'Origin': 'https://wjkc.lol',
-            'Referer': 'https://wjkc.lol/',
-            'Cookie': `token=${token}`
-        };
+const md5 = (text) => {
+    return crypto.createHash('md5').update(text).digest('hex');
+};
 
-        const payload = JSON.stringify({ data: "e30=" });
+/**
+ * 模拟登录并获取 Token
+ * @param {string} email - 账号
+ * @param {string} password - 明文密码
+ * @returns {Promise<string>} - 返回获取到的 Token
+ */
+const getTokenByLogin = async (email, password) => {
+    // 1. 密码 MD5 加密
+    const hashedPassword = md5(password);
 
-        const response = await fetch('https://wjkc.lol/api/user/sign_use', {
-            method: 'POST',
-            headers: headers,
-            body: payload,
-        });
+    // 2. 构造登录载荷 (JSON 对象)
+    const loginPayload = {
+        email: email,
+        password: hashedPassword,
+    };
 
-        const result = await response.json();
+    // 3. 将载荷 Base64 编码
+    const base64Payload = Buffer.from(JSON.stringify(loginPayload)).toString('base64');
+    
+    // 4. 构造最终请求体
+    const requestBody = JSON.stringify({ data: base64Payload });
 
-        if (result && result.data) {
-            const decodedData = Buffer.from(result.data, 'base64').toString('utf-8');
-            const checkinResult = JSON.parse(decodedData);
+    const headers = {
+        'Host': 'wjkc.lol',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+    };
 
-            if (checkinResult.code === 0 && checkinResult.msg === "SUCCESS") {
-                const addedTraffic = checkinResult.data.addTraffic || 0;
-                const trafficInMB = (addedTraffic / 1024 / 1024).toFixed(0);
-                return `✅ 签到成功: 获得 ${trafficInMB} MB 流量\n📅 连续签到: ${checkinResult.data.haveContinueSignUseData} 天`;
-            } else {
-                const message = checkinResult.msg || '未知信息';
-                if (message.includes("SIGN_USE_MULTY_TIMES")) {
-                    return `✅ 今日已签到 (或IP限制)`;
-                }
-                if (message.includes("CAN_NOT_SIGNUSE")) {
-                    return `❌ 操作失败: 账号不符合签到条件`;
-                }
-                return `💡 操作完成: ${message}`;
-            }
+    const response = await fetch('https://wjkc.lol/api/user/login', {
+        method: 'POST',
+        headers: headers,
+        body: requestBody,
+    });
+
+    const result = await response.json();
+
+    if (result && result.data) {
+        const decodedData = Buffer.from(result.data, 'base64').toString('utf-8');
+        const loginResult = JSON.parse(decodedData);
+
+        if (loginResult.code === 0 && loginResult.data.token) {
+            return loginResult.data.token; // 登录成功，返回 token
         } else {
-            throw new Error(result.msg || 'Token 可能已失效');
+            throw new Error(`登录失败: ${loginResult.msg || '返回了非预期的成功格式'}`);
         }
-    } catch (error) {
-        return `❌ 执行异常: ${error.message}`;
+    } else {
+        throw new Error(result.msg || '登录响应格式无效');
     }
 };
 
 /**
- * 通知函数，将签到结果通过 PushPlus 推送。
- * @param {string} noticeTitle - 通知的标题。
- * @param {string} noticeBody - 通知的主体内容。
+ * 核心签到函数
+ * @param {string} token - 用户的身份令牌。
+ * @returns {Promise<string>} - 返回包含该账号执行结果的、详细的通知字符串。
+ */
+const runCheckinForAccount = async (token) => {
+    const headers = {
+        'Host': 'wjkc.lol',
+        'Content-Type': 'application/json',
+        'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36',
+        'Cookie': `token=${token}`
+    };
+
+    const payload = JSON.stringify({ data: "e30=" });
+
+    const response = await fetch('https://wjkc.lol/api/user/sign_use', {
+        method: 'POST',
+        headers: headers,
+        body: payload,
+    });
+
+    const result = await response.json();
+
+    if (result && result.data) {
+        const decodedData = Buffer.from(result.data, 'base64').toString('utf-8');
+        const checkinResult = JSON.parse(decodedData);
+
+        if (checkinResult.code === 0 && checkinResult.msg === "SUCCESS") {
+            const addedTraffic = checkinResult.data.addTraffic || 0;
+            const trafficInMB = (addedTraffic / 1024 / 1024).toFixed(0);
+            return `✅ 签到成功: 获得 ${trafficInMB} MB 流量\n📅 连续签到: ${checkinResult.data.haveContinueSignUseData} 天`;
+        } else {
+            const message = checkinResult.msg || '未知信息';
+            if (message.includes("SIGN_USE_MULTY_TIMES")) {
+                return `✅ 今日已签到 (或IP限制)`;
+            }
+            if (message.includes("CAN_NOT_SIGNUSE")) {
+                return `❌ 操作失败: 账号不符合签到条件`;
+            }
+            return `💡 操作完成: ${message}`;
+        }
+    } else {
+        throw new Error(result.msg || '签到响应格式无效');
+    }
+};
+
+/**
+ * 通知函数
+ * @param {string} noticeTitle - 通知的标题.
+ * @param {string} noticeBody - 通知的主体内容.
  */
 const notify = async (noticeTitle, noticeBody) => {
     if (!process.env.NOTIFY || !noticeBody) {
@@ -75,7 +132,11 @@ const notify = async (noticeTitle, noticeBody) => {
         return;
     }
     
-    // 我们只处理 pushplus
+    console.log("--- Notification Preview ---");
+    console.log(`Title: ${noticeTitle}`);
+    console.log(`Body:\n${noticeBody}`);
+    console.log("--- End Notification Preview ---");
+
     const pushplusConfig = String(process.env.NOTIFY).split('\n').find(line => line.startsWith('pushplus:'));
     
     if (!pushplusConfig) {
@@ -111,25 +172,22 @@ const notify = async (noticeTitle, noticeBody) => {
     }
 };
 
-
 /**
  * 主执行函数 (程序入口)
  */
 const main = async () => {
-    console.log("开始执行签到任务...");
+    console.log("开始执行模拟登录签到任务...");
 
-    // 从环境变量中获取配置
-    const wjkcConfig = process.env.WJKC_TOKEN;
+    const wjkcConfig = process.env.WJKC_CREDENTIALS;
 
     if (!wjkcConfig) {
-        console.error("错误: 找不到 WJKC_TOKEN 环境变量。请在仓库 Secrets 中配置。");
-        process.exit(1); // 退出并标记 Action 失败
+        console.error("错误: 找不到 WJKC_CREDENTIALS 环境变量。请在仓库 Secrets 中配置。");
+        process.exit(1);
     }
 
-    // 支持多账号，通过换行符分割
     const configs = wjkcConfig.split('\n').filter(c => c.trim() !== '');
     if (configs.length === 0) {
-        console.log("WJKC_TOKEN 配置为空，任务结束。");
+        console.log("配置为空，任务结束。");
         return;
     }
     
@@ -142,40 +200,45 @@ const main = async () => {
     for (let i = 0; i < configs.length; i++) {
         const configLine = configs[i];
         const parts = configLine.split(',').map(p => p.trim());
-        const token = parts[0];
-        // 允许用户为每个token设置一个别名，方便在通知中识别
-        const alias = parts[1] || `账号 ${i + 1}`; 
+        const email = parts[0];
+        const password = parts[1];
+        const alias = parts[2] || `账号 ${i + 1}`;
         
         console.log(`- 正在处理 ${alias}...`);
+
+        let noticeMessage = '';
+        try {
+            console.log(`  - 步骤1: 模拟登录...`);
+            const token = await getTokenByLogin(email, password);
+            console.log(`  - 登录成功，正在执行签到...`);
+            
+            noticeMessage = await runCheckinForAccount(token);
+        } catch (error) {
+            noticeMessage = `❌ 登录/签到流程失败: ${error.message}`;
+        }
         
-        const resultMessage = await runCheckinForAccount(token);
-        
-        if (resultMessage.includes('✅')) {
+        if (noticeMessage.includes('✅')) {
             successCount++;
         } else {
             failCount++;
         }
 
-        allNoticeDetails.push(`[${alias}]\n${resultMessage}`);
+        allNoticeDetails.push(`[${alias}]\n${noticeMessage}`);
         
-        // 友好延迟
         if (i < configs.length - 1) {
             await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
 
-    console.log("所有账号处理完毕。");
+    console.log("\n所有账号处理完毕。");
     console.log(`执行结果: ${successCount} 成功, ${failCount} 失败/异常。`);
 
-    // --- 构造最终通知 ---
     const title = `网际快车签到报告 (${successCount}/${configs.length} 成功)`;
     const body = allNoticeDetails.join('\n\n---\n\n');
     
-    // 发送最终通知
     await notify(title, body);
     
     console.log("任务执行完成。");
 };
 
-// 运行主函数
 main();
